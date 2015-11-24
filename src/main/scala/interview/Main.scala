@@ -1,5 +1,5 @@
 package interview
 
 object Main extends App {
-  println("Hello, world!")
+  def Greeting = "Hello, World!"
 }
