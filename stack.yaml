@@ -3,7 +3,8 @@ resolver: lts-7.4
 packages:
 - '.'
 
-extra-deps: []
+extra-deps:
+- optparse-applicative-0.12.1.0
 
 flags: {}
 
