@@ -16,7 +16,16 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Runner
+  other-modules:       Nodes
   build-depends:       base >= 4.7 && < 5
+                     , distributed-process
+                     , distributed-process-simplelocalnet
+                     , concurrent-extra
+                     , network-transport
+                     , network-transport-tcp
+                     , binary
+                     , time
+                     , random
   default-language:    Haskell2010
 
 executable interview-exe

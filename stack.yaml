@@ -5,6 +5,10 @@ packages:
 
 extra-deps:
 - optparse-applicative-0.12.1.0
+- distributed-process-0.6.6
+- distributed-process-simplelocalnet-0.2.3.3
+- network-multicast-0.1.2
+- network-transport-tcp-0.5.1
 
 flags: {}
 
