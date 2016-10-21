@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 
@@ -8,15 +10,18 @@ module Runner
 
 import Control.Concurrent (threadDelay)
 import Control.Distributed.Process
+import Control.Distributed.Process.Serializable
 import Control.Monad
 import Data.Foldable
 import Data.List
+import Data.Maybe (fromMaybe, isJust)
 import Data.Time.Clock
 import System.Random
 import Data.Binary
 import Data.Binary.Orphans
 import Data.Typeable
 import GHC.Generics
+import qualified System.Exit as SE (die)
 
 import Nodes
 
@@ -37,8 +42,10 @@ data RealMsg = RealMsg
    { sentAt :: UTCTime -- the \tau function
    , payload :: Double
    } deriving (Show, Eq, Generic, Typeable)
-
 instance Binary RealMsg
+
+data StopSending = StopSending deriving (Show, Eq, Generic, Typeable)
+instance Binary StopSending
 
 randomRealMsg :: RandomGen g => g -> UTCTime -> (RealMsg, g)
 randomRealMsg g sentAt = (msg, nextG) where
@@ -47,6 +54,9 @@ randomRealMsg g sentAt = (msg, nextG) where
     { sentAt = sentAt
     , payload = 1.0 - v -- has to ∈ (0,1] (while `v` ∈ [0,1))
     }
+
+calculateTuple :: [RealMsg] -> (Int, Double)
+calculateTuple msgs = (0, 0.0)
 
 sameElements :: (Eq a) => [a] -> [a] -> Bool -- FIXME: use Set
 sameElements xs ys = null (xs \\ ys) && null (ys \\ xs)
@@ -63,7 +73,8 @@ receiveNewPeers currentState newPeers = do
                       , m = m currentState } -- FIXME: use lens
 
 receiveRealMessage :: ProcessState -> RealMsg -> Process ProcessState
-receiveRealMessage currentState msg =
+receiveRealMessage currentState msg = do
+  --say $ "got " ++ show msg
   return ProcessState { knownPeers = knownPeers currentState
                       , m = msg:(m currentState) }
 
@@ -73,23 +84,83 @@ notifyPeersOfPeers peers = do
   myself <- getSelfNode
   forM_ (filter (/= myself) peers) $ \p -> nsendRemote p processName peers
 
+childSender :: RandomGen g => g -> [NodeId] -> Process ()
+childSender rng peers = do
+  now <- liftIO $ getCurrentTime
+  let (msg, nextRng) = randomRealMsg rng now
+  forM_ peers $ \p -> nsendRemote p processName msg
+  -- check mailbox for peer updates and stop signal in a non-blocking manner
+  newPeers    <- expectTimeout 0 :: Process (Maybe [NodeId])
+  stopSending <- expectTimeout 0 :: Process (Maybe StopSending)
+  unless (isJust stopSending) $
+    childSender nextRng (fromMaybe peers newPeers)
+
+-- Will send the given `msg` to `rcpt` at `time`.
+timer :: Serializable a => UTCTime -> a -> ProcessId -> Process ()
+timer time msg rcpt = do
+  now <- liftIO $ getCurrentTime
+  let inThisManyUs = round $ (*1000000) $ diffUTCTime time now
+  liftIO $ threadDelay inThisManyUs
+  send rcpt msg
+
+killer :: UTCTime -> Process ()
+killer at = do
+  getSelfPid >>= spawnLocal . timer at ()
+  _ <- expect :: Process ()
+  liftIO $ SE.die "killer: time is up" -- spec says “«program» is killed”
+
+receiveAllRemainingMessagesDuringGrace = True -- I’m not sure if that’s what the spec says
+
 process :: RandomGen g => g -> UTCTime -> UTCTime -> [NodeId] -> Process ()
-process rng stopSendingAt stopReceivingAt initialPeers = do
-  getSelfPid >>= register processName
+process rng stopSendingAt killAt initialPeers = do
+
+  ------------- spec-0: sending messages -------------
+
+  myself <- getSelfPid
+  register processName myself
+  spawnLocal $ killer killAt -- potentially, will execute spec-2: killing
 
   say $ "my initialPeers (of length " ++ show (length initialPeers) ++ ") = " ++ show initialPeers
 
   let initialState = ProcessState { knownPeers = initialPeers, m = [] }
   notifyPeersOfPeers $ knownPeers initialState
 
-  let loop state = do
-        nextState <- receiveWait [ match $ receiveNewPeers state
-                                 , match $ receiveRealMessage state]
-        loop nextState
+  localSender <- spawnLocal $ childSender rng initialPeers
 
-  loop initialState
+  -- timers
+  forM_ [myself, localSender] $ spawnLocal . timer stopSendingAt StopSending
 
-  liftIO $ threadDelay $ 1 * 1000 * 1000
+  let loop0 state = do -- FIXME: use `until`?
+       (nextState,continue) <- receiveWait
+          [ match $ \(m :: StopSending) -> do
+              say "got StopSending!"
+              return (state,False)
+          , match $ \m -> (,True) <$> receiveRealMessage state m
+          , match $ \m -> (,True) <$> receiveNewPeers    state m ]
+       if continue
+         then loop0 nextState
+         else return nextState
+
+  preGraceState <- loop0 initialState
+
+  say $ "pre-grace: I’ve got " ++ show (length $ m preGraceState) ++ " messages so far."
+
+  ------------- spec-1: grace period -------------
+
+  let loop1 state = do
+        -- receive with timeout == 0 — just grab what already is in there
+        nextState <- receiveTimeout 0 [ match $ receiveRealMessage state ]
+        case nextState of
+          Nothing -> return state
+          Just ns -> loop1 ns
+
+  finalState <- if receiveAllRemainingMessagesDuringGrace
+                then loop1 preGraceState
+                else return preGraceState
+
+  say $ "peri-grace: I’ve got " ++ show (length $ m finalState) ++ " messages in the final state."
+
+  liftIO $ putStrLn $ show $ calculateTuple $ m finalState
 
 -- Now, we need to somehow provide *different* RNGs to consecutive
 -- processes. To not pollute the configuration module (Nodes) with the
@@ -101,8 +172,8 @@ run :: Configuration -> IO ()
 run unsafeConf = do
   now <- getCurrentTime
   let stopSendingAt   = addSec now $ sendFor conf
-  let stopReceivingAt = addSec stopSendingAt $ gracePeriod conf
-  runOnNodes $ fmap (\p -> p stopSendingAt stopReceivingAt) processesWithRngs
+  let killAt = addSec stopSendingAt $ gracePeriod conf
+  runOnNodes $ fmap (\p -> p stopSendingAt killAt) processesWithRngs
     where
       processesWithRngs = map (\rng -> process rng) rngs
       rngs = iterate (snd . split) firstRng
