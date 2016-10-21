@@ -14,7 +14,8 @@ thisManyNodes = 10
 
 transportPort = "10501"
 
-initialPeerDiscoveryTimeout = 100 * 1000 -- µs, this time is “lost”…
+initialPeerDiscoveryTimeout = 500 -- µs, this time is “lost” (taken
+                                  -- from at least `--send-for SEC`)
 
 nthLoopback :: Int -> String
 nthLoopback n = "127.0.0." ++ show n -- FIXME: System.Socket.Family.Inet?

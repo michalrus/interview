@@ -24,6 +24,7 @@ library
                      , network-transport
                      , network-transport-tcp
                      , binary
+                     , binary-orphans
                      , time
                      , random
   default-language:    Haskell2010
