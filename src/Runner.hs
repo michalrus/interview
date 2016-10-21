@@ -56,7 +56,14 @@ randomRealMsg g sentAt = (msg, nextG) where
     }
 
 calculateTuple :: [RealMsg] -> (Int, Double)
-calculateTuple msgs = (0, 0.0)
+calculateTuple msgs =
+  (len, score)
+    where
+      len = length msgs
+      sorted = sortOn sentAt msgs
+      indexed = zip [1..] sorted
+      products = (\(i,m_i) -> i * (payload m_i)) <$> indexed
+      score = sum products
 
 sameElements :: (Eq a) => [a] -> [a] -> Bool -- FIXME: use Set
 sameElements xs ys = null (xs \\ ys) && null (ys \\ xs)
