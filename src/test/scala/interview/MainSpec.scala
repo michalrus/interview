@@ -1,7 +1,5 @@
 package interview
 
-import org.scalatest.WordSpec
-
 class MainSpec extends UnitSpec {
   "Greeting" should {
     "be nice" in {
@@ -10,6 +8,8 @@ class MainSpec extends UnitSpec {
   }
 
   "Addition" should {
-    "be commutative" in forAll { (a: Int, b: Int) ⇒ b + a shouldEqual a + b }
+    "be commutative" in forAll { (a: Int, b: Int) ⇒
+      b + a shouldEqual a + b
+    }
   }
 }
