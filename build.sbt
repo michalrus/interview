@@ -27,7 +27,8 @@ lazy val root = (project in file("."))
                                      "-Ywarn-unused",
                                      "-Ywarn-unused-import",
                                      "-Ywarn-value-discard"),
-    wartremoverErrors ++= Warts.all,
+    wartremoverErrors ++= Warts
+      .allBut(Wart.Any, Wart.Nothing, Wart.Option2Iterable, Wart.Equals),
     libraryDependencies ++= Seq(
       "org.scalatest"     %% "scalatest"    % "2.2.4" % "test",
       "org.scalacheck"    %% "scalacheck"   % "1.12.5" % "test",
