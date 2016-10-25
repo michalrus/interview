@@ -29,7 +29,19 @@ lazy val root = (project in file("."))
                                      "-Ywarn-value-discard"),
     wartremoverErrors ++= Warts.all,
     libraryDependencies ++= Seq(
-      "org.scalatest"  %% "scalatest"  % "2.2.4"  % "test",
-      "org.scalacheck" %% "scalacheck" % "1.12.5" % "test"
-    )
+      "org.scalatest"     %% "scalatest"    % "2.2.4" % "test",
+      "org.scalacheck"    %% "scalacheck"   % "1.12.5" % "test",
+      "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % "test",
+      "com.typesafe.akka" %% "akka-actor"   % AkkaVersion
+    ),
+    unmanagedJars in Compile ++= {
+      val scapiPath = baseDirectory.value / "lib" / "scapi" // change me if that’s untrue
+      val deps = List("activemq-all-5.9.1",
+                      "bcprov-jdk16-146",
+                      "commons-exec-1.2",
+                      "Scapi-2.4")
+      deps.map(j ⇒ scapiPath / s"$j.jar")
+    }
   )
+
+val AkkaVersion = "2.4.11"

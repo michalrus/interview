@@ -2,3 +2,5 @@ target/
 
 .ensime
 .ensime_cache/
+
+/lib/
