@@ -8,7 +8,7 @@ import edu.biu.scapi.interactiveMidProtocols.sigmaProtocol.damgardJurikProduct.{
 import edu.biu.scapi.midLayer.asymmetricCrypto.encryption.ScDamgardJurikEnc
 import edu.biu.scapi.midLayer.asymmetricCrypto.keys.DamgardJurikPublicKey
 import edu.biu.scapi.midLayer.ciphertext.BigIntegerCiphertext
-import edu.biu.scapi.midLayer.plaintext.{BigIntegerPlainText, Plaintext}
+import edu.biu.scapi.midLayer.plaintext.BigIntegerPlainText
 import java.security.{KeyPair, PublicKey, SecureRandom}
 import java.util.UUID
 
@@ -60,6 +60,16 @@ object Broker {
     EncryptedMsg(cipherText, r)
   }
 
+  def decrypt(encryptor: ScDamgardJurikEnc,
+    keys: KeyPair,
+    cipherText: EncryptedMsg): BigInt = {
+    encryptor.setKey(keys.getPublic, keys.getPrivate)
+    @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
+    val plainText = encryptor.decrypt(cipherText.cipherText)
+      .asInstanceOf[BigIntegerPlainText] // :crying-cat:
+    plainText.getX
+  }
+
 }
 
 trait WithSession { self: Actor ⇒ // DRY hard with Actors?
@@ -99,7 +109,7 @@ final class Broker(myKeys: KeyPair, verificationPublicKey: PublicKey) extends Ac
     case EncryptedSecret(sessionId, party, cipher) ⇒
       /* spec-2° */
       withSession(sessions, sessionId, state _) { session ⇒
-        collectFromBoth(session, party, Some(cipher))(
+        collectFromBoth(session, party, cipher)(
           _.cipherA,
           _.cipherB,
           (s, v) ⇒ s.copy(cipherA = v),
@@ -113,8 +123,7 @@ final class Broker(myKeys: KeyPair, verificationPublicKey: PublicKey) extends Ac
       /* spec-4° */
       withSession(sessions, sessionId, state _) { session ⇒
         /* spec-5° */
-        encryptor.setKey(myKeys.getPublic, myKeys.getPrivate)
-        val plainText = toBigInt(encryptor.decrypt(cipher.cipherText))
+        val plainText = decrypt(encryptor, myKeys, cipher)
         collectFromBoth(session, party, plainText)(
           _.plainA,
           _.plainB,
@@ -162,7 +171,7 @@ final class Broker(myKeys: KeyPair, verificationPublicKey: PublicKey) extends Ac
     */
   def collectFromBoth[V, M](session: Session,
                             senderParty: ActorRef,
-                            newValue: Option[V])(
+                            newValue: V)(
       readA: Session ⇒ Option[V],
       readB: Session ⇒ Option[V],
       writeA: (Session, Option[V]) ⇒ Session,
@@ -170,9 +179,9 @@ final class Broker(myKeys: KeyPair, verificationPublicKey: PublicKey) extends Ac
       tellBoth: (V, V) ⇒ M): Session = {
     val newSession =
       if (senderParty == session.parties.userA && readA(session).isEmpty) {
-        writeA(session, newValue)
+        writeA(session, Some(newValue))
       } else if (senderParty == session.parties.userB && readB(session).isEmpty) {
-        writeB(session, newValue)
+        writeB(session, Some(newValue))
       } else {
         /* handle the wicked situation somehow */
         session
@@ -186,11 +195,5 @@ final class Broker(myKeys: KeyPair, verificationPublicKey: PublicKey) extends Ac
 
     newSession
   }
-
-  def toBigInt(pt: Plaintext): Option[BigInt] =
-    pt match {
-      case bipt: BigIntegerPlainText ⇒ Some(bipt.getX)
-      case _                         ⇒ None
-    }
 
 }

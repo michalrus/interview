@@ -39,7 +39,7 @@ object Main extends App {
   /** This public key (and *only* public, private can be dumped!) is
     * used by all parties for public announcements and verifications
     * (points 2, 3, 5 of the spec). Its cipher texts are never
-    * directly decrypted.
+    * directly decrypted. See README.md.
     */
   val verificationPublicKey = verificationKeys.getPublic
 
