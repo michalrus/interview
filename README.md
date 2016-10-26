@@ -12,6 +12,8 @@
 
 1. Error handling (`git-grep` for “wicked situation”). Also, if a party gets some malformed ciphertext and then tries to decrypt it, the process might throw.
 
+1. Currently, the parties are not able to perform more than one verification concurrently (within *one* party). Easy to fix, but I don’t know if this is required and fixing would further complicate the code.
+
 ## Depending on scapi
 
 1. Update `scapiPath` in `build.sbt` to point to where you have installed scapi—if you already have it installed. If not, see below.

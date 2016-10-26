@@ -1,38 +1,56 @@
 package interview
 
 import akka.actor.{Actor, ActorRef, Props}
+import edu.biu.scapi.interactiveMidProtocols.sigmaProtocol.damgardJurikProduct.{
+  SigmaDJProductCommonInput,
+  SigmaDJProductVerifierComputation
+}
+import edu.biu.scapi.interactiveMidProtocols.sigmaProtocol.utility.SigmaProtocolMsg
+import edu.biu.scapi.midLayer.asymmetricCrypto.keys.DamgardJurikPublicKey
 import edu.biu.scapi.midLayer.asymmetricCrypto.encryption.ScDamgardJurikEnc
-import edu.biu.scapi.midLayer.ciphertext.AsymmetricCiphertext
-import edu.biu.scapi.midLayer.plaintext.BigIntegerPlainText
-import java.security.{KeyPair, PublicKey, SecureRandom}
+import java.security.{PublicKey, SecureRandom}
 import java.util.UUID
 
-object User {
-  def props(keys: KeyPair) = Props(new User(keys))
+import Broker.EncryptedMsg
 
-  final case class Session(secret: BigInt,
-                           cA: Option[AsymmetricCiphertext],
-                           cB: Option[AsymmetricCiphertext])
+object User {
+  def props(verificationPublicKey: PublicKey) =
+    Props(new User(verificationPublicKey))
+
+  final case class Session(
+      secret: BigInt,
+      cA: Option[EncryptedMsg],
+      cB: Option[EncryptedMsg],
+      cC: Option[EncryptedMsg],
+      verifierComputation: Option[SigmaDJProductVerifierComputation])
 
   final case class Invite(session: UUID, broker: ActorRef)
 
   final case class BothCipherTexts(session: UUID,
-                                   cA: AsymmetricCiphertext,
-                                   cB: AsymmetricCiphertext,
+                                   cA: EncryptedMsg,
+                                   cB: EncryptedMsg,
                                    broker: ActorRef,
                                    brokerKey: PublicKey)
 
   final case class EncryptedProduct(session: UUID,
-                                    cC: AsymmetricCiphertext,
+                                    cC: EncryptedMsg,
                                     broker: ActorRef)
+
+  final case class Proof(session: UUID,
+                         a: SigmaProtocolMsg,
+                         z: SigmaProtocolMsg)
 }
 
 import User._
+import Broker.{calculateSoundness, encrypt}
 
-final class User(keys: KeyPair) extends Actor {
+final class User(verificationPublicKey: PublicKey)
+    extends Actor
+    with WithSession {
 
   val rng       = new SecureRandom
   val encryptor = new ScDamgardJurikEnc(rng)
+  encryptor.setLengthParameter(MagicNumbers.LengthParameter)
 
   def receive = state(Map.empty)
 
@@ -40,39 +58,77 @@ final class User(keys: KeyPair) extends Actor {
 
     case Invite(sessionId, broker) ⇒
       /* spec-1° */
-      val secret = BigInt(rng.nextInt).abs // has to be ≥ 0
-      encryptor.setKey(keys.getPublic) // encrypting «for me»
-      val plainText  = new BigIntegerPlainText(secret.underlying)
-      val cipherText = encryptor.encrypt(plainText)
+      val secret = BigInt(rng.nextInt).abs                           // has to be ≥ 0
+      val msg    = encrypt(encryptor, verificationPublicKey, secret) // encrypting for later verification
       /* spec-2° */
-      sender() ! Environment
-        .Tell(broker, Broker.EncryptedSecret(sessionId, self, cipherText))
+      sender() ! Environment.Tell(broker,
+                                  Broker.EncryptedSecret(sessionId, self, msg))
       context.become(
-        state(sessions + (sessionId → Session(secret, None, None))))
+        state(
+          sessions + (sessionId → Session(secret, None, None, None, None))))
 
     case BothCipherTexts(sessionId, cA, cB, broker, brokerKey) ⇒
       /* spec-3° */
-      sessions.get(sessionId).foreach { session ⇒
+      withSession(sessions, sessionId, state _) { session ⇒
         if (session.cA.isDefined || session.cB.isDefined) {
           /* handle the wicked situation somehow */
         }
 
         /* spec-4° */
-        encryptor.setKey(brokerKey)
-        val plainText  = new BigIntegerPlainText(session.secret.underlying)
-        val cipherText = encryptor.encrypt(plainText)
+        val msg = encrypt(encryptor, brokerKey, session.secret)
         sender() ! Environment
-          .Tell(broker, Broker.DecryptableSecret(sessionId, self, cipherText))
+          .Tell(broker, Broker.DecryptableSecret(sessionId, self, msg))
 
-        val newSession = session.copy(cA = Some(cA), cB = Some(cB))
-        context.become(state(sessions + (sessionId → newSession)))
+        session.copy(cA = Some(cA), cB = Some(cB))
       }
 
     case EncryptedProduct(sessionId, product, broker) ⇒
       /* spec-5° */
-      // TODO: Verify!
-      val _ = context.system.terminate()
+      withSession(sessions, sessionId, state _) { session ⇒
+        val newSession = session.copy(cC = Some(product))
+        requestProof(newSession, sessionId, broker)
+      }
 
+    case Proof(sessionId, a, z) ⇒
+      withSession(sessions, sessionId, state _) { session ⇒
+        (session.cA zip session.cB zip session.cC zip session.verifierComputation).headOption foreach {
+          case (((cA, cB), cC), computation) ⇒
+            @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
+            val input = new SigmaDJProductCommonInput(
+              verificationPublicKey
+                .asInstanceOf[DamgardJurikPublicKey], // :crying-cat:
+              cA.cipherText,
+              cB.cipherText,
+              cC.cipherText)
+            val result = computation.verify(input, a, z)
+            sender() ! Environment.VerificationResult(sessionId, result)
+        }
+        session
+      }
+
+  }
+
+  def requestProof(session: Session,
+                   sessionId: UUID,
+                   broker: ActorRef): Session = {
+    val newSession = (session.cA zip session.cB zip session.cC).headOption map {
+      case ((cA, cB), cC) ⇒
+        val t = calculateSoundness(verificationPublicKey)
+
+        val computation =
+          new SigmaDJProductVerifierComputation(t,
+                                                MagicNumbers.LengthParameter,
+                                                rng)
+
+        computation.sampleChallenge()
+        val challenge = computation.getChallenge
+        sender() ! Environment.Tell(
+          broker,
+          Broker.ProofRequest(sessionId, self, cA, cB, cC, challenge))
+
+        session.copy(verifierComputation = Some(computation))
+    }
+    newSession getOrElse session
   }
 
 }

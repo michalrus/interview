@@ -7,18 +7,49 @@ import edu.biu.scapi.midLayer.asymmetricCrypto.encryption.{
 }
 import java.security.SecureRandom
 
+object MagicNumbers {
+
+  // sample values, taken from scapi docs
+  val KeyModulusLength      = 128
+  val KeyPrimenessCertainty = 40
+
+  // If not given explicitly, the length param is calculated according
+  // to this formula:
+  //
+  //   |plain| / (|publicKey| - 1) + 1
+  //
+  // Since we’re encrypting 31-bit integers, this would always end up
+  // at just 1 (Paillier’s scheme). Let’s force it to something more
+  // exciting.
+  val LengthParameter = 11
+
+}
+
 object Main extends App {
 
   val rng       = new SecureRandom()
   val encryptor = new ScDamgardJurikEnc(rng)
-  val aliceKeys, bobKeys, carrollKeys =
-    encryptor.generateKey(new DJKeyGenParameterSpec(128, 40))
+
+  encryptor.setLengthParameter(MagicNumbers.LengthParameter)
+  val aliceKeys, bobKeys, carrollKeys, verificationKeys =
+    encryptor.generateKey(
+      new DJKeyGenParameterSpec(MagicNumbers.KeyModulusLength,
+                                MagicNumbers.KeyPrimenessCertainty))
+
+  /** This public key (and *only* public, private can be dumped!) is
+    * used by all parties for public announcements and verifications
+    * (points 2, 3, 5 of the spec). Its cipher texts are never
+    * directly decrypted.
+    */
+  val verificationPublicKey = verificationKeys.getPublic
 
   val system = ActorSystem()
 
-  val alice   = system.actorOf(User.props(aliceKeys), "alice")
-  val bob     = system.actorOf(User.props(bobKeys), "bob")
-  val carroll = system.actorOf(Broker.props(carrollKeys), "carroll")
+  val alice =
+    system.actorOf(User.props(verificationPublicKey), "alice")
+  val bob = system.actorOf(User.props(verificationPublicKey), "bob")
+  val carroll =
+    system.actorOf(Broker.props(carrollKeys, verificationPublicKey), "carroll")
 
   val environment =
     system.actorOf(Environment.props, "environment")
