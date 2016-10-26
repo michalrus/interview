@@ -6,7 +6,7 @@
 
       > Common input statement: public key *n* and ciphertexts *c₁*, *c₂*, *c₃*.
 
-   Therefore, to perform verification, all three ciphertexts have to be encrypted with the same public key *n*. For this purpose, all parties are using the `Main.verificationPublicKey`. It’s private counterpart is forgotten and never used.
+   Therefore, to perform verification, all three ciphertexts have to be encrypted with the same public key *n*. For this purpose, all parties are using the `Main.verificationPublicKey`. Its private counterpart is forgotten and never used. An interesting consequence of that is that users don’t need their own key pairs.
 
 1. The protocol lacks sending `r_1`, `r_2`, `r_3`, the random values used in encryption of `c_A`, `c_B`, `c_C`. These values are needed for product verification later on. I’m sending them in a product type, along the ciphertexts.
 
@@ -22,6 +22,8 @@
 
 1. Currently, the parties are not able to perform more than one verification concurrently (within *one* party). Easy to fix, but I don’t know if this is required and fixing would further complicate the code.
 
+1. Timeouts are not tested, but 1) I’ve chosen the `User` actor for behavioral testing and 2) it doesn’t do anything interesting (yet?) with `ProtocolAbort`.
+
 ## Ideas
 
 1. Getting rid of `Environment` and running each exchange in separate `akka.actor.FSM`s (children of `User`s and the `Broker`) would probably make the code much cleaner… and we’d be getting clean timeouts for free!
@@ -36,26 +38,26 @@
 
 1. After updating submodules, I had to do this to `lib/OTExtension/` (syntax incompatibility with GNU Make?):
 
-```diff
-diff --git a/Makefile b/Makefile
-index a1bc51f..18cf055 100644
---- a/Makefile
-+++ b/Makefile
-@@ -45,13 +45,13 @@ otlib: ${OBJECTS_UTIL} ${OBJECTS_OT}
- otmain: ${OBJECTS_UTIL}  ${OBJECTS_OT} ${OBJECTS_OTMAIN}
-        ${CXX} -o ot.exe $(INCLUDE) ${CFLAGS} ${OBJECTS_OTMAIN} ${OBJECTS_UTIL} ${OBJECTS_OT} ${LIBRARIES} ${COMPILER_OPTIONS}
+   ```diff
+   diff --git a/Makefile b/Makefile
+   index a1bc51f..18cf055 100644
+   --- a/Makefile
+   +++ b/Makefile
+   @@ -45,13 +45,13 @@ otlib: ${OBJECTS_UTIL} ${OBJECTS_OT}
+    otmain: ${OBJECTS_UTIL}  ${OBJECTS_OT} ${OBJECTS_OTMAIN}
+           ${CXX} -o ot.exe $(INCLUDE) ${CFLAGS} ${OBJECTS_OTMAIN} ${OBJECTS_UTIL} ${OBJECTS_OT} ${LIBRARIES} ${COMPILER_OPTIONS}
 
--${OBJECTS_OTMAIN}: ${SOURCES_OTMAIN}$
-+${OBJECTS_OTMAIN}: ${SOURCES_OTMAIN}
-        @cd mains; ${CXX} -c ${INCLUDE} ${CFLAGS} otmain.cpp
+   -${OBJECTS_OTMAIN}: ${SOURCES_OTMAIN}$
+   +${OBJECTS_OTMAIN}: ${SOURCES_OTMAIN}
+           @cd mains; ${CXX} -c ${INCLUDE} ${CFLAGS} otmain.cpp
 
--${OBJECTS_UTIL}: ${SOURCES_UTIL}$
-+${OBJECTS_UTIL}: ${SOURCES_UTIL}
-        @cd util; ${CXX} -c ${CFLAGS} ${INCLUDE} ${BATCH} *.cpp
+   -${OBJECTS_UTIL}: ${SOURCES_UTIL}$
+   +${OBJECTS_UTIL}: ${SOURCES_UTIL}
+           @cd util; ${CXX} -c ${CFLAGS} ${INCLUDE} ${BATCH} *.cpp
 
--${OBJECTS_OT}: ${SOURCES_OT}$
-+${OBJECTS_OT}: ${SOURCES_OT}
-        @cd ot; ${CXX} -c ${CFLAGS} ${INCLUDE} ${BATCH} *.cpp
+   -${OBJECTS_OT}: ${SOURCES_OT}$
+   +${OBJECTS_OT}: ${SOURCES_OT}
+           @cd ot; ${CXX} -c ${CFLAGS} ${INCLUDE} ${BATCH} *.cpp
 
- install:
-```
+    install:
+   ```
