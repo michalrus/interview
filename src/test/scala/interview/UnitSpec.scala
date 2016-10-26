@@ -3,7 +3,7 @@ package interview
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
-abstract class UnitSpec
-    extends WordSpec
+trait UnitSpec
+    extends WordSpecLike
     with Matchers
     with GeneratorDrivenPropertyChecks

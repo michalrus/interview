@@ -32,7 +32,7 @@ object Main extends App {
   val encryptor = new ScDamgardJurikEnc(rng)
 
   encryptor.setLengthParameter(MagicNumbers.LengthParameter)
-  val aliceKeys, bobKeys, carrollKeys, verificationKeys =
+  val carrollKeys, verificationKeys =
     encryptor.generateKey(
       new DJKeyGenParameterSpec(MagicNumbers.KeyModulusLength,
                                 MagicNumbers.KeyPrimenessCertainty))
