@@ -1,6 +1,7 @@
 package interview
 
-import akka.actor.{Actor, ActorRef, Props}
+import akka.actor.{Actor, ActorRef, Cancellable, Props}
+import akka.util.Timeout
 import edu.biu.scapi.interactiveMidProtocols.sigmaProtocol.damgardJurikProduct.{
   SigmaDJProductProverComputation,
   SigmaDJProductProverInput
@@ -13,12 +14,16 @@ import java.security.{KeyPair, PublicKey, SecureRandom}
 import java.util.UUID
 
 object Broker {
-  def props(keys: KeyPair, verificationPublicKey: PublicKey) = Props(new Broker(keys, verificationPublicKey))
+  def props(keys: KeyPair,
+            verificationPublicKey: PublicKey,
+            timeout: Timeout) =
+    Props(new Broker(keys, verificationPublicKey, timeout))
 
   /** `r` is the random integer chosen for encryption of `cipherText` */
   final case class EncryptedMsg(cipherText: BigIntegerCiphertext, r: BigInt)
 
   final case class Session(parties: Parties,
+                           timeoutCancellable: Option[Cancellable],
                            cipherA: Option[EncryptedMsg],
                            cipherB: Option[EncryptedMsg],
                            plainA: Option[BigInt],
@@ -37,6 +42,8 @@ object Broker {
                                 cipherB: EncryptedMsg,
                                 cipherC: EncryptedMsg,
                                 challenge: Array[Byte])
+
+  private final case class Timeouted(session: UUID, environment: ActorRef)
 
   // According to the Cookbook, soundness has to be < |n|/3:
   def calculateSoundness(k: PublicKey): Int =
@@ -61,11 +68,12 @@ object Broker {
   }
 
   def decrypt(encryptor: ScDamgardJurikEnc,
-    keys: KeyPair,
-    cipherText: EncryptedMsg): BigInt = {
+              keys: KeyPair,
+              cipherText: EncryptedMsg): BigInt = {
     encryptor.setKey(keys.getPublic, keys.getPrivate)
     @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
-    val plainText = encryptor.decrypt(cipherText.cipherText)
+    val plainText = encryptor
+      .decrypt(cipherText.cipherText)
       .asInstanceOf[BigIntegerPlainText] // :crying-cat:
     plainText.getX
   }
@@ -76,19 +84,27 @@ trait WithSession { self: Actor ⇒ // DRY hard with Actors?
   /** Runs an `action` in the context of current communication
     * session.
     */
-  def withSession[S](
-      sessions: Map[UUID, S],
-      id: UUID,
-      nextBehavior: Map[UUID, S] ⇒ Actor.Receive)(action: S ⇒ S): Unit =
+  def withSession[S](sessions: Map[UUID, S],
+                     id: UUID,
+                     nextBehavior: Map[UUID, S] ⇒ Actor.Receive)(
+      action: S ⇒ Option[S]): Unit =
     sessions.get(id).foreach { session ⇒
       val ns = action(session)
-      context.become(nextBehavior(sessions + (id → ns)))
+      val nss = ns match {
+        case Some(ns) ⇒ sessions + (id → ns)
+        case None     ⇒ sessions - id
+      }
+      context.become(nextBehavior(nss))
     }
 }
 
 import Broker._
 
-final class Broker(myKeys: KeyPair, verificationPublicKey: PublicKey) extends Actor with WithSession {
+final class Broker(myKeys: KeyPair,
+                   verificationPublicKey: PublicKey,
+                   timeout: Timeout)
+    extends Actor
+    with WithSession {
 
   val rng       = new SecureRandom
   val encryptor = new ScDamgardJurikEnc(rng)
@@ -103,28 +119,46 @@ final class Broker(myKeys: KeyPair, verificationPublicKey: PublicKey) extends Ac
       /* spec-1° */
       List(a, b).foreach(p ⇒
         sender() ! Environment.Tell(p, User.Invite(id, self)))
+      val cancellable = scheduleTimeout(id, sender())
       context.become(
-        state(sessions + (id → Session(ps, None, None, None, None))))
+        state(
+          sessions + (id → Session(ps,
+                                   Some(cancellable),
+                                   None,
+                                   None,
+                                   None,
+                                   None))))
+
+    case Timeouted(sessionId, environment) ⇒
+      withSession(sessions, sessionId, state _) { session ⇒
+        List(session.parties.userA, session.parties.userB).foreach(p ⇒
+          environment ! Environment.Tell(p, User.ProtocolAbort(sessionId)))
+        None // delete the session
+      }
 
     case EncryptedSecret(sessionId, party, cipher) ⇒
       /* spec-2° */
       withSession(sessions, sessionId, state _) { session ⇒
-        collectFromBoth(session, party, cipher)(
+        session.timeoutCancellable.foreach(_.cancel())
+        val ns = collectFromBoth(session, party, cipher)(
           _.cipherA,
           _.cipherB,
           (s, v) ⇒ s.copy(cipherA = v),
           (s, v) ⇒ s.copy(cipherB = v),
           /* spec-3° */
-          (cA,
-           cB) ⇒ User.BothCipherTexts(sessionId, cA, cB, self, myKeys.getPublic))
+          (cA, cB) ⇒
+            User.BothCipherTexts(sessionId, cA, cB, self, myKeys.getPublic))
+        val cancellable = scheduleTimeout(sessionId, sender())
+        Some(ns.copy(timeoutCancellable = Some(cancellable)))
       }
 
     case DecryptableSecret(sessionId, party, cipher) ⇒
       /* spec-4° */
       withSession(sessions, sessionId, state _) { session ⇒
+        session.timeoutCancellable.foreach(_.cancel())
         /* spec-5° */
         val plainText = decrypt(encryptor, myKeys, cipher)
-        collectFromBoth(session, party, plainText)(
+        val ns = collectFromBoth(session, party, plainText)(
           _.plainA,
           _.plainB,
           (s, v) ⇒ s.copy(plainA = v),
@@ -133,6 +167,7 @@ final class Broker(myKeys: KeyPair, verificationPublicKey: PublicKey) extends Ac
             val msg     = encrypt(encryptor, verificationPublicKey, product) // encrypting for verification
             User.EncryptedProduct(sessionId, msg, self)
           })
+        Some(ns)
       }
 
     case ProofRequest(sessionId, party, cA, cB, cC, challenge) ⇒
@@ -160,7 +195,7 @@ final class Broker(myKeys: KeyPair, verificationPublicKey: PublicKey) extends Ac
             val z = computation.computeSecondMsg(challenge)
             sender() ! Environment.Tell(party, User.Proof(sessionId, a, z))
         }
-        session
+        Some(session)
       }
 
   }
@@ -194,6 +229,12 @@ final class Broker(myKeys: KeyPair, verificationPublicKey: PublicKey) extends Ac
     }
 
     newSession
+  }
+
+  def scheduleTimeout(session: UUID, environment: ActorRef): Cancellable = {
+    import context.dispatcher
+    context.system.scheduler
+      .scheduleOnce(timeout.duration, self, Timeouted(session, environment))
   }
 
 }

@@ -6,6 +6,7 @@ import edu.biu.scapi.midLayer.asymmetricCrypto.encryption.{
   ScDamgardJurikEnc
 }
 import java.security.SecureRandom
+import scala.concurrent.duration._
 
 object MagicNumbers {
 
@@ -49,7 +50,8 @@ object Main extends App {
     system.actorOf(User.props(verificationPublicKey), "alice")
   val bob = system.actorOf(User.props(verificationPublicKey), "bob")
   val carroll =
-    system.actorOf(Broker.props(carrollKeys, verificationPublicKey), "carroll")
+    system.actorOf(Broker.props(carrollKeys, verificationPublicKey, 1.second),
+                   "carroll")
 
   val environment =
     system.actorOf(Environment.props, "environment")

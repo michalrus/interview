@@ -26,6 +26,8 @@ object User {
 
   final case class Invite(session: UUID, broker: ActorRef)
 
+  final case class ProtocolAbort(session: UUID)
+
   final case class BothCipherTexts(session: UUID,
                                    cA: EncryptedMsg,
                                    cB: EncryptedMsg,
@@ -58,7 +60,7 @@ final class User(verificationPublicKey: PublicKey)
 
     case Invite(sessionId, broker) ⇒
       /* spec-1° */
-      val secret = BigInt(rng.nextInt).abs                           // has to be ≥ 0
+      val secret = BigInt(rng.nextInt).abs // has to be ≥ 0
       val msg    = encrypt(encryptor, verificationPublicKey, secret) // encrypting for later verification
       /* spec-2° */
       sender() ! Environment.Tell(broker,
@@ -66,6 +68,9 @@ final class User(verificationPublicKey: PublicKey)
       context.become(
         state(
           sessions + (sessionId → Session(secret, None, None, None, None))))
+
+    case ProtocolAbort(sessionId) ⇒
+    /* handle timeout somehow */
 
     case BothCipherTexts(sessionId, cA, cB, broker, brokerKey) ⇒
       /* spec-3° */
@@ -79,14 +84,14 @@ final class User(verificationPublicKey: PublicKey)
         sender() ! Environment
           .Tell(broker, Broker.DecryptableSecret(sessionId, self, msg))
 
-        session.copy(cA = Some(cA), cB = Some(cB))
+        Some(session.copy(cA = Some(cA), cB = Some(cB)))
       }
 
     case EncryptedProduct(sessionId, product, broker) ⇒
       /* spec-5° */
       withSession(sessions, sessionId, state _) { session ⇒
         val newSession = session.copy(cC = Some(product))
-        requestProof(newSession, sessionId, broker)
+        Some(requestProof(newSession, sessionId, broker))
       }
 
     case Proof(sessionId, a, z) ⇒
@@ -103,7 +108,7 @@ final class User(verificationPublicKey: PublicKey)
             val result = computation.verify(input, a, z)
             sender() ! Environment.VerificationResult(sessionId, result)
         }
-        session
+        Some(session)
       }
 
   }
