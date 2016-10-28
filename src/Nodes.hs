@@ -32,19 +32,20 @@ nthLoopback n = "127.0.0." ++ show n
 -- problem with calls to `say`—their content would be interleaved when
 -- printed to stderr… Because we’re simulating n machines in the same
 -- OS process, let’s ‘cheat’ by creating a shared logger DP process.
-oneNode :: ProcessId -> (Int, [NodeId] -> Process ()) -> IO ()
+oneNode :: ProcessId -> (Int, [NodeId] -> (Int -> Process [NodeId]) -> Process ()) -> IO ()
 oneNode logger (nth, process) = do
   backend <- initializeBackend (nthLoopback nth) (show transportPort) N.initRemoteTable
   node <- newLocalNode backend
   peers <- findPeers backend initialPeerDiscoveryTimeout
+  let findPeersProcess tmout = liftIO $ findPeers backend tmout
   N.runProcess node $ do
     reregister "logger" logger
-    process peers
+    process peers findPeersProcess
 
 -- |If you wish to run the app on a different set of nodes,
 -- reimplement this function. 'processGen' is a list of processes you
 -- should be consecutively starting on every node you launch.
-runOnNodes :: [[NodeId] -> Process ()] -> IO ()
+runOnNodes :: [[NodeId] -> (Int -> Process [NodeId]) -> Process ()] -> IO ()
 runOnNodes processGen = do
   loggerPidMV <- newEmptyMVar
   forkIO $ loggerNode loggerPidMV

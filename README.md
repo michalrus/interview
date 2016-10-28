@@ -202,10 +202,7 @@ As can be seen in the first column, the timing is quite correct.
     peer, to its peers) is more beneficial… but I doubt that, as
     sending messages is asynchronous anyway,
 
-  * check if the UDP multicat is a reliable one,
-
-  * maybe add another multicast during the clusters normal lifetime
-    (when topology is not changing), just in case?
+  * check if the UDP multicast is a reliable one.
 
 * Cosmetic changes:
 

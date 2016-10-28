@@ -36,6 +36,13 @@ data Configuration = Configuration
 -- with).
 processName = "main"
 
+-- |How frequently to search for new peer nodes in the network
+findNewPeersEvery = 2 * 1000 * 1000 -- µs
+
+-- |Should we receive ALL of the remaining messages during the grace
+-- period? I’m not really sure if that’s what the spec says.
+receiveAllRemainingMessagesDuringGrace = True
+
 data ProcessState = ProcessState
   { knownPeers :: [NodeId]
   , receivedMessages :: [RealMsg]
@@ -103,6 +110,13 @@ notifyPeersOfPeers peers = do
   myself <- getSelfNode
   forM_ (filter (/= myself) peers) $ \p -> nsendRemote p processName peers
 
+-- |Will run 'action' if there’s no 'StopSending' message in current
+-- process’ mailbox.
+doUnlessStopped :: Process () -> Process ()
+doUnlessStopped action = do
+  stopSending <- expectTimeout 0 :: Process (Maybe StopSending)
+  unless (isJust stopSending) $ action
+
 -- |A subprocess that’s constantly sending 'RealMsg's to known peers,
 -- until it receives the 'StopSending' message. To update its list of
 -- peers, send… a new list of peers (the old one will be substituted).
@@ -111,11 +125,18 @@ childSender rng peers = do
   now <- liftIO $ getCurrentTime
   let (msg, nextRng) = randomRealMsg rng now
   forM_ peers $ \p -> nsendRemote p processName msg
-  -- check mailbox for peer updates and stop signal in a non-blocking manner
-  newPeers    <- expectTimeout 0 :: Process (Maybe [NodeId])
-  stopSending <- expectTimeout 0 :: Process (Maybe StopSending)
-  unless (isJust stopSending) $
-    childSender nextRng (fromMaybe peers newPeers)
+  -- check mailbox for peer updates (in a non-blocking manner)
+  newPeers <- expectTimeout 0 :: Process (Maybe [NodeId])
+  doUnlessStopped $ childSender nextRng (fromMaybe peers newPeers)
+
+-- |Keeps finding new peers every few seconds and sending them back to
+-- the main process ('sendTo'). Implementation of 'findPeers' is
+-- highly dependent on the network. E.g. it could be a UDP multicast.
+keepFindingPeers :: (Int -> Process [NodeId]) -> ProcessId -> Process ()
+keepFindingPeers findPeers sendTo = do
+  found <- findPeers findNewPeersEvery
+  unless (null found) $ send sendTo found
+  doUnlessStopped $ keepFindingPeers findPeers sendTo
 
 -- |Will send the given 'msg' to 'rcpt' at the given 'time'.
 timer :: Serializable a => UTCTime -> a -> ProcessId -> Process ()
@@ -133,13 +154,9 @@ killer at = do
   _ <- expect :: Process ()
   liftIO $ SE.die "killer: time is up" -- spec says “«program» is killed”
 
--- |Should we receive ALL of the remaining messages during the grace
--- period? I’m not really sure if that’s what the spec says.
-receiveAllRemainingMessagesDuringGrace = True
-
 -- |The main/root process of every node.
-process :: RandomGen g => g -> UTCTime -> UTCTime -> [NodeId] -> Process (Int, Double)
-process rng stopSendingAt killAt initialPeers = do
+process :: RandomGen g => g -> UTCTime -> UTCTime -> [NodeId] -> (Int -> Process [NodeId]) -> Process (Int, Double)
+process rng stopSendingAt killAt initialPeers findPeers = do
 
   ------------- spec-0: sending messages -------------
 
@@ -153,9 +170,10 @@ process rng stopSendingAt killAt initialPeers = do
   notifyPeersOfPeers $ knownPeers initialState
 
   localSender <- spawnLocal $ childSender rng initialPeers
+  peerFinder <- spawnLocal $ keepFindingPeers findPeers myself
 
   -- timers
-  forM_ [myself, localSender] $ spawnLocal . timer stopSendingAt StopSending
+  forM_ [myself, localSender, peerFinder] $ spawnLocal . timer stopSendingAt StopSending
 
   let loop0 state = do -- FIXME: use `until`?
        (nextState,continue) <- receiveWait
@@ -206,7 +224,8 @@ run unsafeConf = do
       processesWithRngs = map (\rng -> processWithPrint rng) rngs
       rngs = iterate (snd . split) firstRng
       firstRng = mkStdGen $ seed conf
-      processWithPrint a b c d = liftIO . putStrLn . show =<< process a b c d
+      processWithPrint a b c d e = liftIO . putStrLn . show =<< process a b c d e -- no sensible way to
+                                                                                  -- do this point-free?
       addSec a b = addUTCTime (fromInteger $ toInteger $ b) a
       conf = sanitize unsafeConf
       sanitize (Configuration a b c) = Configuration (abs a) (abs b) (abs c)
