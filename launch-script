@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+set -o noclobber
+set -o errexit
+set -o nounset
+set -o pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+[ "${1:-}" = "--debug" ] && DEBUG=1 && shift || DEBUG=
+
+cd "$DIR"
+
+stack build
+
+if [ $DEBUG ] ; then
+    echo "$(date -Ins) running ‘stack test’…"
+    echo
+    stack test 2>&1
+    echo "$(date -Ins) running ‘stack exec’…"
+    echo
+    stack exec interview-exe -- "$@" 2> >( grep -vE 'knownPeers|new peers' >&2 )
+    echo
+    echo "$(date -Ins) process exited with $?"
+else
+    stack exec interview-exe -- "$@" 2> >( grep -vFi 'peers' >&2 )
+fi

@@ -105,48 +105,122 @@ grading of the solution):
 
 ## Example
 
-Printing all the log messages takes considerably more time (at least
-to my terminal emulator), so here is the output with final tuples and
-grace-period-related messages only:
+Printing all the log messages takes a considerable amount of time (at
+least to my terminal emulator), so the provided `launch-script`
+filters most of those:
 
 ```
-% alias tss='ts "%Y-%m-%d %H:%M:%.S"$'\''\t'\'
+% ./launch-script
+Missing: --send-for SECONDS --wait-for SECONDS --with-seed SEED
 
-% ( date ; \
-    ./interview-exe --send-for 6 --wait-for 10 --with-seed 10503 2>&1 | grep -E 'grace|^\(' ; \
-    date ; ) | tss
+Usage: interview-exe --send-for SECONDS --wait-for SECONDS --with-seed SEED
 
-2016-10-21 21:44:12.962408       Fri Oct 21 21:44:12 CEST 2016
-2016-10-21 21:44:19.372643       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.8:10501:0:10: pre-grace: I’ve got 3712 messages so far.
-2016-10-21 21:44:19.372763       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.8:10501:0:10: peri-grace: I’ve got 3712 messages in the final state.
-2016-10-21 21:44:19.372809       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.4:10501:0:10: pre-grace: I’ve got 17598 messages so far.
-2016-10-21 21:44:19.372852       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.4:10501:0:10: peri-grace: I’ve got 17601 messages in the final state.
-2016-10-21 21:44:19.372895       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.9:10501:0:10: pre-grace: I’ve got 11073 messages so far.
-2016-10-21 21:44:19.372941       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.10:10501:0:10: pre-grace: I’ve got 2868 messages so far.
-2016-10-21 21:44:19.372983       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.10:10501:0:10: peri-grace: I’ve got 2868 messages in the final state.
-2016-10-21 21:44:19.373026       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.5:10501:0:10: pre-grace: I’ve got 27780 messages so far.
-2016-10-21 21:44:19.373067       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.5:10501:0:10: peri-grace: I’ve got 27784 messages in the final state.
-2016-10-21 21:44:19.373109       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.1:10501:0:10: pre-grace: I’ve got 1563 messages so far.
-2016-10-21 21:44:19.373151       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.1:10501:0:10: peri-grace: I’ve got 1570 messages in the final state.
-2016-10-21 21:44:19.373198       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.3:10501:0:10: pre-grace: I’ve got 8419 messages so far.
-2016-10-21 21:44:19.373261       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.3:10501:0:10: peri-grace: I’ve got 8419 messages in the final state.
-2016-10-21 21:44:19.373299       Fri Oct 21 19:44:18 UTC 2016 pid://127.0.0.9:10501:0:10: peri-grace: I’ve got 11082 messages in the final state.
-2016-10-21 21:44:19.373337       Fri Oct 21 19:44:19 UTC 2016 pid://127.0.0.6:10501:0:10: pre-grace: I’ve got 11708 messages so far.
-2016-10-21 21:44:19.373373       Fri Oct 21 19:44:19 UTC 2016 pid://127.0.0.6:10501:0:10: peri-grace: I’ve got 11969 messages in the final state.
-2016-10-21 21:44:19.373412       (8419,1.771552671510441e7)
-2016-10-21 21:44:19.373449       (17601,7.778375861769518e7)
-2016-10-21 21:44:19.373487       (2868,2055313.1252860774)
-2016-10-21 21:44:19.373523       (11082,3.083165491805066e7)
-2016-10-21 21:44:19.373554       (1570,598713.076066068)
-2016-10-21 21:44:19.373585       (27784,1.9284630421839693e8)
-2016-10-21 21:44:19.373618       (11969,3.590190847309941e7)
-2016-10-21 21:44:19.373651       (3312,2739929.116742483)
-2016-10-21 21:44:19.373684       (18351,8.431254444565432e7)
-2016-10-21 21:44:19.374864       Fri Oct 21 21:44:19 CEST 2016
-
+% ./launch-script --send-for 5 --wait-for 1 --with-seed 1
+(6104,9269702.655930057)
+(6108,9273478.13697705)
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.6:10501:0:10: got StopSending!
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.6:10501:0:10: pre-grace: I’ve got 6104 messages so far.
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.6:10501:0:10: peri-grace: I’ve got 6108 messages in the final state.
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.7:10501:0:10: got StopSending!
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.7:10501:0:10: pre-grace: I’ve got 6103 messages so far.
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.7:10501:0:10: peri-grace: I’ve got 6104 messages in the final state.
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.4:10501:0:10: got StopSending!
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.4:10501:0:10: pre-grace: I’ve got 119308 messages so far.
+(6199,9573308.058435662)
+(13266,4.370715770854487e7)
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.2:10501:0:10: got StopSending!
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.2:10501:0:10: pre-grace: I’ve got 6191 messages so far.
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.2:10501:0:10: peri-grace: I’ve got 6199 messages in the final state.
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.4:10501:0:10: peri-grace: I’ve got 119318 messages in the final state.
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.10:10501:0:10: got StopSending!
+(4055,4097041.4055770617)
+(6227,9635836.800797215)
+(8099,1.6305006353892066e7)
+(119318,3.5657791386828623e9)
+(10482,2.7491442352444764e7)
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.10:10501:0:10: pre-grace: I’ve got 13263 messages so far.
+Fri Oct 28 20:01:18 UTC 2016 pid://127.0.0.10:10501:0:10: peri-grace: I’ve got 13266 messages in the final state.
+(23924,1.4224226456514654e8)
 ```
 
-As can be seen in the first column, the timing is quite correct.
+Some of the `stderr` was clearly lost, however all 10 expected tuples
+were written to `stdout`.
+
+The `launch-script` can be passed a `--debug` flag as its first
+argument. Then, it filters the `stderr` less, runs tests and adds some
+additional timestamps.
+
+```
+% ./launch-script --debug --send-for 5 --wait-for 1 --with-seed 1
+2016-10-28T22:17:15,446468806+02:00 running ‘stack test’…
+
+interview-0.1.0.0: test (suite: interview-test)
+
+[…]
+
+2016-10-28T22:17:18,179079612+02:00 running ‘stack exec’…
+
+Fri Oct 28 20:17:19 UTC 2016 pid://127.0.0.3:10501:0:10: my initialPeers (of length 2) = [nid://127.0.0.1:10501:0,nid://127.0.0.3:10501:0]
+Fri Oct 28 20:17:19 UTC 2016 pid://127.0.0.1:10501:0:10: my initialPeers (of length 2) = [nid://127.0.0.1:10501:0,nid://127.0.0.3:10501:0]
+Fri Oct 28 20:17:19 UTC 2016 pid://127.0.0.10:10501:0:10: my initialPeers (of length 2) = [nid://127.0.0.1:10501:0,nid://127.0.0.3:10501:0]
+Fri Oct 28 20:17:19 UTC 2016 pid://127.0.0.8:10501:0:10: my initialPeers (of length 6) = [nid://127.0.0.1:10501:0,nid://127.0.0.2:10501:0,nid://127.0.0.3:10501:0,nid://127.0.0.6:10501:0,nid://127.0.0.7:10501:0,nid://127.0.0.8:10501:0]
+Fri Oct 28 20:17:19 UTC 2016 pid://127.0.0.2:10501:0:10: my initialPeers (of length 7) = [nid://127.0.0.1:10501:0,nid://127.0.0.2:10501:0,nid://127.0.0.3:10501:0,nid://127.0.0.5:10501:0,nid://127.0.0.6:10501:0,nid://127.0.0.7:10501:0,nid://127.0.0.8:10501:0]
+Fri Oct 28 20:17:19 UTC 2016 pid://127.0.0.7:10501:0:10: my initialPeers (of length 5) = [nid://127.0.0.1:10501:0,nid://127.0.0.2:10501:0,nid://127.0.0.3:10501:0,nid://127.0.0.7:10501:0,nid://127.0.0.8:10501:0]
+Fri Oct 28 20:17:19 UTC 2016 pid://127.0.0.6:10501:0:10: my initialPeers (of length 6) = [nid://127.0.0.1:10501:0,nid://127.0.0.2:10501:0,nid://127.0.0.3:10501:0,nid://127.0.0.6:10501:0,nid://127.0.0.7:10501:0,nid://127.0.0.8:10501:0]
+Fri Oct 28 20:17:19 UTC 2016 pid://127.0.0.5:10501:0:10: my initialPeers (of length 7) = [nid://127.0.0.1:10501:0,nid://127.0.0.2:10501:0,nid://127.0.0.3:10501:0,nid://127.0.0.5:10501:0,nid://127.0.0.6:10501:0,nid://127.0.0.7:10501:0,nid://127.0.0.8:10501:0]
+Fri Oct 28 20:17:19 UTC 2016 pid://127.0.0.4:10501:0:10: my initialPeers (of length 10) = [nid://127.0.0.10:10501:0,nid://127.0.0.1:10501:0,nid://127.0.0.2:10501:0,nid://127.0.0.3:10501:0,nid://127.0.0.4:10501:0,nid://127.0.0.5:10501:0,nid://127.0.0.6:10501:0,nid://127.0.0.7:10501:0,nid://127.0.0.8:10501:0,nid://127.0.0.9:10501:0]
+Fri Oct 28 20:17:19 UTC 2016 pid://127.0.0.9:10501:0:10: my initialPeers (of length 9) = [nid://127.0.0.10:10501:0,nid://127.0.0.1:10501:0,nid://127.0.0.2:10501:0,nid://127.0.0.3:10501:0,nid://127.0.0.5:10501:0,nid://127.0.0.6:10501:0,nid://127.0.0.7:10501:0,nid://127.0.0.8:10501:0,nid://127.0.0.9:10501:0]
+(5885,8530184.51326529)
+(9509,2.2505299591975145e7)
+(4396,4871215.0594848925)
+(13878,4.8439581768553756e7)
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.10:10501:0:10: got StopSending!
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.10:10501:0:10: pre-grace: I’ve got 9509 messages so far.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.10:10501:0:10: peri-grace: I’ve got 9509 messages in the final state.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.1:10501:0:10: got StopSending!
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.1:10501:0:10: pre-grace: I’ve got 28783 messages so far.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.1:10501:0:10: peri-grace: I’ve got 28784 messages in the final state.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.6:10501:0:10: got StopSending!
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.6:10501:0:10: pre-grace: I’ve got 13876 messages so far.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.6:10501:0:10: peri-grace: I’ve got 13878 messages in the final state.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.4:10501:0:10: got StopSending!
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.4:10501:0:10: pre-grace: I’ve got 5885 messages so far.
+(28784,2.069931099859176e8)
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.4:10501:0:10: peri-grace: I’ve got 5885 messages in the final state.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.5:10501:0:10: got StopSending!
+(9537,2.264057402684156e7)
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.2:10501:0:10: got StopSending!
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.2:10501:0:10: pre-grace: I’ve got 4376 messages so far.
+(14503,5.24668661509739e7)
+(9589,2.312385528184515e7)
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.2:10501:0:10: peri-grace: I’ve got 4396 messages in the final state.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.3:10501:0:10: got StopSending!
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.3:10501:0:10: pre-grace: I’ve got 14486 messages so far.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.3:10501:0:10: peri-grace: I’ve got 14503 messages in the final state.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.9:10501:0:10: got StopSending!
+(23360,1.36752700898935e8)
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.9:10501:0:10: pre-grace: I’ve got 9504 messages so far.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.9:10501:0:10: peri-grace: I’ve got 9537 messages in the final state.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.5:10501:0:10: pre-grace: I’ve got 23357 messages so far.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.5:10501:0:10: peri-grace: I’ve got 23360 messages in the final state.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.7:10501:0:10: got StopSending!
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.7:10501:0:10: pre-grace: I’ve got 9572 messages so far.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.7:10501:0:10: peri-grace: I’ve got 9589 messages in the final state.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.8:10501:0:10: got StopSending!
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.8:10501:0:10: pre-grace: I’ve got 17783 messages so far.
+Fri Oct 28 20:17:24 UTC 2016 pid://127.0.0.8:10501:0:10: peri-grace: I’ve got 17787 messages in the final state.
+(17787,7.913895842149054e7)
+
+2016-10-28T22:17:25,031743287+02:00 process exited with 0
+```
+
+The timing seems pretty correct (starting at `my initialPeers` and
+ending at `got StopSending`—5 seconds that were requested).
+
+**All in all, it’s best to run `stack exec interview-exe` and grep the
+output to your liking.** Even better: run the executable directly,
+bypassing stack’s startup overhead. Then, `/bin/time` could even be
+used to get some useful information.
 
 ---
 
