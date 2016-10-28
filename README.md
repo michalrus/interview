@@ -24,7 +24,7 @@ grading of the solution):
 * I’ve rejected the master/slave model from Control.Distributed,
   because I don’t have any information at all on what will fail. It
   might be safest to assume that failure of each node is equally
-  probable. And then, having nodes with equal responsibilities seem
+  probable. And then, having nodes with equal responsibilities seems
   more reliable. (This needs testing).
 
 * A joining node has to know at least one neighbor initially:
@@ -39,7 +39,7 @@ grading of the solution):
   * there could be some central tracking server(s) (like in BT), but
     that’s a SPOF.
 
-* I’ve decided that peers will each be brodcasting their *peer lists*
+* I’ve decided that each peer will be brodcasting their *peer lists*
   to their *peers*. We’re already broadcasting all real messages in
   this way, and this is way more chatty (and suggests that the whole
   network is not huge).
@@ -107,7 +107,7 @@ grading of the solution):
 
 Printing all the log messages takes considerably more time (at least
 to my terminal emulator), so here is the output with final tuples and
-grace-perdiod-related messages only:
+grace-period-related messages only:
 
 ```
 % alias tss='ts "%Y-%m-%d %H:%M:%.S"$'\''\t'\'
@@ -152,14 +152,18 @@ As can be seen in the first column, the timing is quite correct.
 
 ## Possible improvements
 
-* It’s very tempting to calculate the tuples on the fly. Unfortunately
+* It’s very tempting to calculate the tuples on the fly. Unfortunately,
   they have to be sorted on time sent and not received. What could be
   done, though, is keeping only last 500 ms in memory and rejecting
   any latecomers in the final result.
 
 * Instead of sorting the *m* list at the very end, insertions could be
   used.  (However, it’s worth noting, that the *m* list is more/less
-  well sorted already).
+  well sorted already—however, reversed).
+
+* Typed channels should be used for communication. Related: using
+  `nsendRemote` (to treat a node more/less like a process) seems
+  smelly.
 
 * Regarding node discovery:
 
@@ -207,7 +211,7 @@ As can be seen in the first column, the timing is quite correct.
 
   * add pretty pictures to this README.md from Wikipedia? =)
 
-  * various `FIXME`s in the code, using the Reader monad, Data.Set
+  * various `FIXME`s in the code, using the State monad, Data.Set
     instead of List etc.
 
   * add code auto-formatter and Unicode symbols,
@@ -220,6 +224,13 @@ As can be seen in the first column, the timing is quite correct.
     before they flush all of their messages to stderr,
 
   * somehow get µs in logger timestamps.
+
+* Probably, a Prelude should be used that is saner than the default
+  one. `ClassyPrelude`, perhaps?
+
+* Potential `Exception`s in processes are not handled. However, I’m
+  not using them for flow control myself, they could happen during
+  setting up transports etc.
 
 * Automatic tests, but I need more specs to do that — related to [the
   first paragraph of this README](#the-main-challenge),
