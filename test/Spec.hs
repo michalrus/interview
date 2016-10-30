@@ -1,2 +1,10 @@
+import Test.Tasty
+import Test.Tasty.QuickCheck
+import Test.Tasty.HUnit
+
+import qualified RunnerSpec
+
 main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+main = defaultMain $ testGroup "Tests"
+  [ RunnerSpec.tests
+  ]

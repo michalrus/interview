@@ -6,6 +6,12 @@
 module Runner
     ( run
     , Configuration(..)
+      -- used for tests; should probably go in a separate Runner.Internal
+    , processName
+    , notifyPeersOfPeers
+    , sameElements
+    , RealMsg(..)
+    , randomRealMsg
     ) where
 
 import Control.Concurrent (threadDelay)

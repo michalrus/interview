@@ -297,7 +297,11 @@ used to get some useful information.
   * the artificial shared logger process and node are sometimes dying
     before they flush all of their messages to stderr,
 
-  * somehow get µs in logger timestamps.
+  * somehow get µs in logger timestamps,
+
+  * maybe making `Runner.killer` not a Process, but an IO thread,
+    would be more correct (as it’s meant to kill not just a
+    process/node, but the whole application).
 
 * Probably, a Prelude should be used that is saner than the default
   one. `ClassyPrelude`, perhaps?
