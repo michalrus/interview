@@ -31,6 +31,11 @@ data Configuration = Configuration
   , seed :: Int
   } deriving (Show, Eq)
 
+data MainProcessConfig = MainProcessConfig
+  { stopSendingAt, killAt :: UTCTime
+  , nodesConfig :: NodesConfig
+  }
+
 -- |For the sake of simplicity, let’s treat a node as having only one
 -- process with this name (at least one which other nodes communicate
 -- with).
@@ -94,15 +99,13 @@ receiveNewPeers currentState newPeers = do
     say $ "  sending my new peers further (got " ++ show (length merged) ++ ")"
     notifyPeersOfPeers merged                                 -- tell everyone of the fact
   say $ "waiting with knownPeers = " ++ show merged
-  return ProcessState { knownPeers = merged
-                      , receivedMessages = receivedMessages currentState } -- FIXME: lens
+  return $ currentState { knownPeers = merged }
 
 -- |Processes a real message (with a payload) received from a neighboring node.
 receiveRealMessage :: ProcessState -> RealMsg -> Process ProcessState
 receiveRealMessage currentState msg = do
   --say $ "got " ++ show msg
-  return ProcessState { knownPeers = knownPeers currentState
-                      , receivedMessages = msg:(receivedMessages currentState) }
+  return currentState { receivedMessages = msg:(receivedMessages currentState) }
 
 -- |Sends all known peers to all known peers (excluding the sending process).
 notifyPeersOfPeers :: [NodeId] -> Process ()
@@ -130,8 +133,7 @@ childSender rng peers = do
   doUnlessStopped $ childSender nextRng (fromMaybe peers newPeers)
 
 -- |Keeps finding new peers every few seconds and sending them back to
--- the main process ('sendTo'). Implementation of 'findPeers' is
--- highly dependent on the network. E.g. it could be a UDP multicast.
+-- the main process ('sendTo').
 keepFindingPeers :: (Int -> Process [NodeId]) -> ProcessId -> Process ()
 keepFindingPeers findPeers sendTo = do
   found <- findPeers findNewPeersEvery
@@ -151,29 +153,33 @@ timer time msg rcpt = do
 killer :: UTCTime -> Process ()
 killer at = do
   getSelfPid >>= spawnLocal . timer at ()
-  _ <- expect :: Process ()
+  expect :: Process ()
   liftIO $ SE.die "killer: time is up" -- spec says “«program» is killed”
 
 -- |The main/root process of every node.
-process :: RandomGen g => g -> UTCTime -> UTCTime -> [NodeId] -> (Int -> Process [NodeId]) -> Process (Int, Double)
-process rng stopSendingAt killAt initialPeers findPeers = do
+process :: RandomGen g => g -> MainProcessConfig -> Process (Int, Double)
+process rng config = do
 
   ------------- spec-0: sending messages -------------
 
   myself <- getSelfPid
   register processName myself
-  spawnLocal $ killer killAt -- potentially, will execute spec-2: killing
+  spawnLocal $ killer (killAt config) -- potentially, will execute spec-2: killing
 
-  say $ "my initialPeers (of length " ++ show (length initialPeers) ++ ") = " ++ show initialPeers
+  let initialState = ProcessState
+        { knownPeers = (initialPeers $ nodesConfig config)
+        , receivedMessages = [] }
 
-  let initialState = ProcessState { knownPeers = initialPeers, receivedMessages = [] }
+  say $ "my initialPeers (of length " ++ show (length $ knownPeers initialState) ++ ") = " ++ show (knownPeers initialState)
+
   notifyPeersOfPeers $ knownPeers initialState
 
-  localSender <- spawnLocal $ childSender rng initialPeers
-  peerFinder <- spawnLocal $ keepFindingPeers findPeers myself
+  localSender <- spawnLocal $ childSender rng (initialPeers $ nodesConfig config)
+  peerFinder <- forM (findMorePeers $ nodesConfig config) $ spawnLocal . (flip keepFindingPeers myself)
 
   -- timers
-  forM_ [myself, localSender, peerFinder] $ spawnLocal . timer stopSendingAt StopSending
+  forM_ ([myself, localSender] ++ toList peerFinder) $
+    spawnLocal . timer (stopSendingAt config) StopSending
 
   let loop0 state = do -- FIXME: use `until`?
        (nextState,continue) <- receiveWait
@@ -219,13 +225,13 @@ run unsafeConf = do
   now <- getCurrentTime
   let stopSendingAt = addSec now $ sendFor conf
   let killAt = addSec stopSendingAt $ gracePeriod conf
-  runOnNodes $ fmap (\p -> p stopSendingAt killAt) processesWithRngs
+  runOnNodes $ fmap (\p -> \nodesCfg -> p $ MainProcessConfig stopSendingAt killAt nodesCfg) processesWithRngs
     where
-      processesWithRngs = map (\rng -> processWithPrint rng) rngs
+      processesWithRngs = fmap (\rng -> processWithPrint rng) rngs
       rngs = iterate (snd . split) firstRng
       firstRng = mkStdGen $ seed conf
-      processWithPrint a b c d e = liftIO . putStrLn . show =<< process a b c d e -- no sensible way to
-                                                                                  -- do this point-free?
+      processWithPrint a b = liftIO . putStrLn . show =<< process a b -- no sensible way to
+                                                                      -- do this point-free?
       addSec a b = addUTCTime (fromInteger $ toInteger $ b) a
       conf = sanitize unsafeConf
       sanitize (Configuration a b c) = Configuration (abs a) (abs b) (abs c)

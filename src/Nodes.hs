@@ -1,5 +1,6 @@
 module Nodes
        ( runOnNodes
+       , NodesConfig(..)
        ) where
 
 import Control.Concurrent
@@ -17,6 +18,17 @@ transportPort = 10501
 initialPeerDiscoveryTimeout = 500 -- µs, this time is “lost” (taken
                                   -- from at least `--send-for SEC`)
 
+-- |Each main process will get this. 'findMorePeers' might simply be
+-- 'Nothing' if you don’t have a way to query the network during its
+-- normal operation for additional peers that might have appeared some
+-- time after start. If provided, implementation is highly dependent
+-- on the network model. E.g. it could be a UDP multicast (as
+-- implemented below).
+data NodesConfig = NodesConfig
+  { initialPeers :: [NodeId]
+  , findMorePeers :: Maybe (Int -> Process [NodeId]) -- Int is timeout in µs
+  }
+
 -- |Generates n-th loopback address.
 --
 -- FIXME: should use 'System.Socket.Family.Inet' or something similar
@@ -32,20 +44,23 @@ nthLoopback n = "127.0.0." ++ show n
 -- problem with calls to `say`—their content would be interleaved when
 -- printed to stderr… Because we’re simulating n machines in the same
 -- OS process, let’s ‘cheat’ by creating a shared logger DP process.
-oneNode :: ProcessId -> (Int, [NodeId] -> (Int -> Process [NodeId]) -> Process ()) -> IO ()
+oneNode :: ProcessId -> (Int, NodesConfig -> Process ()) -> IO ()
 oneNode logger (nth, process) = do
   backend <- initializeBackend (nthLoopback nth) (show transportPort) N.initRemoteTable
   node <- newLocalNode backend
   peers <- findPeers backend initialPeerDiscoveryTimeout
-  let findPeersProcess tmout = liftIO $ findPeers backend tmout
+  let config = NodesConfig
+        { initialPeers = peers
+        , findMorePeers = Just $ \tmout -> liftIO $ findPeers backend tmout
+        }
   N.runProcess node $ do
     reregister "logger" logger
-    process peers findPeersProcess
+    process config
 
 -- |If you wish to run the app on a different set of nodes,
 -- reimplement this function. 'processGen' is a list of processes you
 -- should be consecutively starting on every node you launch.
-runOnNodes :: [[NodeId] -> (Int -> Process [NodeId]) -> Process ()] -> IO ()
+runOnNodes :: [NodesConfig -> Process ()] -> IO ()
 runOnNodes processGen = do
   loggerPidMV <- newEmptyMVar
   forkIO $ loggerNode loggerPidMV

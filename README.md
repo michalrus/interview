@@ -226,10 +226,11 @@ used to get some useful information.
 
 ## Possible improvements
 
-* It’s very tempting to calculate the tuples on the fly. Unfortunately,
-  they have to be sorted on time sent and not received. What could be
-  done, though, is keeping only last 500 ms in memory and rejecting
-  any latecomers in the final result.
+* It’s very tempting to calculate the tuples on the
+  fly. Unfortunately, they have to be sorted on time sent and not
+  received. What could be done, though, is keeping only last 500 ms
+  (tuneable) in memory and rejecting any latecomers in the final
+  result.
 
 * Instead of sorting the *m* list at the very end, insertions could be
   used.  (However, it’s worth noting, that the *m* list is more/less
@@ -280,16 +281,18 @@ used to get some useful information.
 
 * Cosmetic changes:
 
+  * use **real** time types, not `Int`s in `Configuration`,
+    `MainProcessConfig` and everywhere else. Using `Int`s is asking
+    for trouble. Intly-typed programming is as bad as stringly-typed…
+    (I’d have to dive into `optparse-applicative` deeper than just
+    scanning the docs),
+
   * add pretty pictures to this README.md from Wikipedia? =)
 
   * various `FIXME`s in the code, using the State monad, Data.Set
     instead of List etc.
 
   * add code auto-formatter and Unicode symbols,
-
-  * keep real time types, not `Int`s in `Runner.Configuration`, I’d
-    have to dive into `optparse-applicative` deeper than just scanning
-    the docs,
 
   * the artificial shared logger process and node are sometimes dying
     before they flush all of their messages to stderr,
