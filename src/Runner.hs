@@ -12,6 +12,8 @@ module Runner
     , sameElements
     , RealMsg(..)
     , randomRealMsg
+    , ProcessState(..)
+    , receiveNewPeers
     ) where
 
 import Control.Concurrent (threadDelay)

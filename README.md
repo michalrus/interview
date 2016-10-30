@@ -287,7 +287,7 @@ used to get some useful information.
     (I’d have to dive into `optparse-applicative` deeper than just
     scanning the docs),
 
-  * add pretty pictures to this README.md from Wikipedia? =)
+  * turn off the `say` logger in tests,
 
   * various `FIXME`s in the code, using the State monad, Data.Set
     instead of List etc.
@@ -301,7 +301,9 @@ used to get some useful information.
 
   * maybe making `Runner.killer` not a Process, but an IO thread,
     would be more correct (as it’s meant to kill not just a
-    process/node, but the whole application).
+    process/node, but the whole application),
+
+  * add pretty pictures to this README.md from Wikipedia? =)
 
 * Probably, a Prelude should be used that is saner than the default
   one. `ClassyPrelude`, perhaps?

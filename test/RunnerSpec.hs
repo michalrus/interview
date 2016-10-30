@@ -55,6 +55,28 @@ tests = testGroup "RunnerSpec"
         (msg, _) = randomRealMsg rng time
       in payload msg <= 1.0 && payload msg > 0.0 && sentAt msg == time
 
+  , testCase "receiveNewPeers should correctly update local ProcessState" $ do
+      transport <- createTransport
+      let genNodes num = forM [1..num] $ \_ -> newLocalNode transport initRemoteTable
+      initialNodes  <- genNodes 4
+      smoreNodes    <- genNodes 2
+      evenMoreNodes <- genNodes 3
+      let node = head initialNodes
+      let stateWith nodes = ProcessState
+            { knownPeers = localNodeId <$> nodes
+            , receivedMessages = [] }
+      let initialState = stateWith initialNodes
+      let hop state nodes = runProcess' node $ receiveNewPeers state (localNodeId <$> nodes)
+      -- TODO: test who in the neighborhood gets sent what
+      nextState    <-  hop initialState []
+      nextState    @?= initialState
+      nextState'   <-  hop initialState smoreNodes
+      nextState'   @?= (stateWith $ initialNodes ++ smoreNodes)
+      nextState''  <-  hop nextState'   smoreNodes
+      nextState''  @?= (stateWith $ initialNodes ++ smoreNodes)
+      nextState''' <-  hop nextState''  evenMoreNodes
+      nextState''' @?= (stateWith $ initialNodes ++ smoreNodes ++ evenMoreNodes)
+
   ]
 
 testProcess :: (Eq a, Show a) => TestName -> a -> Process a -> TestTree
