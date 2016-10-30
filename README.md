@@ -15,7 +15,7 @@ grading of the solution):
 1. More important: **how should I be testing such a scenario locally,
    on my notebook?**
 
-## Decisions
+## Assumptions
 
 * This is 0th iteration. Apart from the main problem above, I’ve
   written down [what could/should be improved at the very
