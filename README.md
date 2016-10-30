@@ -17,9 +17,9 @@ grading of the solution):
 
 ## Assumptions
 
-* This is 0th iteration. Apart from the main problem above, I’ve
+* This is a 1st iteration. Apart from the main problem above, I’ve
   written down [what could/should be improved at the very
-  end](#possible-improvements). What else should be improved?
+  end](#possible-improvements).
 
 * I’ve rejected the master/slave model from Control.Distributed,
   because I don’t have any information at all on what will fail. It
@@ -83,6 +83,11 @@ grading of the solution):
 
 1. Regular/real messages are being constantly sent to all peers from
    the list.
+
+1. If possible, nodes are regularly querying the network for new
+   undiscovered nodes (currently, this is achieved, again, using UDP
+   multicast). If new peers are found, they are added and
+   “broadcasted” to already known peers (as in **2.**).
 
 ## Node configuration
 
@@ -255,6 +260,9 @@ used to get some useful information.
     `findOnePeer :: Int → IO (Maybe NodeId)` might turn out
     better. Perhaps `findPeers` should return a Stream and not a List?
 
+  * `Network.Transport.InMemory` contains the `breakConnection`
+    function, which might be used in tests,
+
   * maybe we could be sending diffs of peer lists? This would
     complicate the algorithm, though;
 
@@ -315,12 +323,14 @@ used to get some useful information.
 * Automatic tests, but I need more specs to do that — related to [the
   first paragraph of this README](#the-main-challenge),
 
+* The tests could be using the `distributed-process-systest` package,
+
 * check how costly it is to ask for system time… `Runner.childSender`
   does it for every message it sends.  Maybe it could be checked every
   n-th message? Also: how costly it is to do calculations on
   `UTCTime`?
 
-* we’re relying on sent times. In this case it’s not that important
+* We’re relying on sent times. In this case it’s not that important
   (see the formula for the final tuples), but if it were, we’d have to
   make sure that nodes have their system times nicely in sync.
 
