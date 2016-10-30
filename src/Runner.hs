@@ -138,6 +138,8 @@ childSender rng peers = do
   forM_ peers $ \p -> nsendRemote p processName msg
   -- check mailbox for peer updates (in a non-blocking manner)
   newPeers <- expectTimeout 0 :: Process (Maybe [NodeId])
+  forM_ newPeers $ \np ->
+    say $ "childSender got peers update: previous = " ++ show peers ++ " ; next = " ++ show np
   doUnlessStopped $ childSender nextRng (fromMaybe peers newPeers)
 
 -- |Keeps finding new peers every few seconds and sending them back to
@@ -196,6 +198,9 @@ process rng config = do
               return (state,False)
           , match $ \m -> (,True) <$> receiveRealMessage state m
           , match $ \m -> (,True) <$> receiveNewPeers    state m ]
+       -- if peers changed, notify the local sender
+       unless (sameElements (knownPeers state) (knownPeers nextState)) $
+          send localSender (knownPeers nextState)
        if continue
          then loop0 nextState
          else return nextState
