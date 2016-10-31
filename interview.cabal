@@ -17,7 +17,9 @@ library
   hs-source-dirs:      src
   exposed-modules:     Runner
   other-modules:       Nodes
+                     , KeepAlive
   build-depends:       base >= 4.7 && < 5
+                     , containers
                      , distributed-process
                      , distributed-process-simplelocalnet
                      , concurrent-extra

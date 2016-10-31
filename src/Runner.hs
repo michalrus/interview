@@ -23,6 +23,7 @@ import Control.Monad
 import Data.Foldable
 import Data.List
 import Data.Maybe (fromMaybe, isJust)
+import qualified Data.Map.Strict as M
 import Data.Time.Clock
 import System.Random
 import Data.Binary
@@ -31,6 +32,7 @@ import Data.Typeable
 import GHC.Generics
 import qualified System.Exit as SE (die)
 
+import qualified KeepAlive as K
 import Nodes
 
 data Configuration = Configuration
@@ -115,6 +117,15 @@ receiveRealMessage currentState msg = do
   --say $ "got " ++ show msg
   return currentState { receivedMessages = msg:(receivedMessages currentState) }
 
+-- |Processes messages from 'peerPinger'.
+receivePeerVisibility :: ProcessState -> K.PeerVisibility -> Process ProcessState
+receivePeerVisibility currentState msg = do
+  say $ "network topology change: " ++ show msg
+  let newPeers = case msg of
+        K.PeerLeft   who -> filter (/= who) $ knownPeers currentState
+        K.PeerIsBack who -> nub $ who:(knownPeers currentState)
+  return currentState { knownPeers = newPeers }
+
 -- |Sends all known peers to all known peers (excluding the sending process).
 notifyPeersOfPeers :: [NodeId] -> Process ()
 notifyPeersOfPeers peers = do
@@ -184,6 +195,8 @@ process rng config = do
 
   notifyPeersOfPeers $ knownPeers initialState
 
+  pinger <- K.pingPeers myself (knownPeers initialState)
+
   localSender <- spawnLocal $ childSender rng (initialPeers $ nodesConfig config)
   peerFinder <- forM (findMorePeers $ nodesConfig config) $ spawnLocal . (flip keepFindingPeers myself)
 
@@ -196,11 +209,12 @@ process rng config = do
           [ match $ \(m :: StopSending) -> do
               say "got StopSending!"
               return (state,False)
-          , match $ \m -> (,True) <$> receiveRealMessage state m
-          , match $ \m -> (,True) <$> receiveNewPeers    state m ]
+          , match $ \m -> (,True) <$> receiveRealMessage    state m
+          , match $ \m -> (,True) <$> receivePeerVisibility state m
+          , match $ \m -> (,True) <$> receiveNewPeers       state m ]
        -- if peers changed, notify the local sender
-       unless (sameElements (knownPeers state) (knownPeers nextState)) $
-          send localSender (knownPeers nextState)
+       unless (sameElements (knownPeers state) (knownPeers nextState)) $ do
+          forM_ [localSender, pinger] $ \rcpt -> send rcpt (knownPeers nextState)
        if continue
          then loop0 nextState
          else return nextState
