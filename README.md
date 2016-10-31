@@ -1,25 +1,9 @@
 # interview
 
-## The main challenge
-
-Currently, losing connectivity with the cluster is not recognized.
-This information is needed for peers to know when to try to re-join
-once more.  How this can be solved (it has to be solved prior to final
-grading of the solution):
-
-1. We could assume that if a peer has not sent a message during the
-   previous 500 ms (needs experimental tuning), then the connection
-   has been dropped. (Taking into account the characteristics of this
-   traffic; normally, a keep-alive message would be necessary).
-
-1. More important: **how should I be testing such a scenario locally,
-   on my notebook?**
-
 ## Assumptions
 
-* This is a 1st iteration. Apart from the main problem above, I’ve
-  written down [what could/should be improved at the very
-  end](#possible-improvements).
+* This is a 1st/2nd iteration. I’ve written down [what could/should be
+  improved at the very end](#possible-improvements).
 
 * I’ve rejected the master/slave model from Control.Distributed,
   because I don’t have any information at all on what will fail. It
@@ -65,7 +49,7 @@ grading of the solution):
 1. New node is turned on. It starts by sending a UDP multicast
    packet. Hopefully, some neighbors receive the packet and respond
    with their addresses. (Alternatively, the list of nodes can be
-   provided in [Node configuration](#node-configuration)).
+   provided in [Node configuration](#a-starting-point-to-review)).
 
 1. This new node’s initial list of peers is populated with neighbors
    found through multicast.  A message containing this list is sent to
@@ -89,24 +73,42 @@ grading of the solution):
    multicast). If new peers are found, they are added and
    “broadcasted” to already known peers (as in **2.**).
 
-## Node configuration
+1. At the same time, in the background, a `"pinger"` process is
+   constantly monitoring connectivity with neighbor nodes. If a
+   ping⟷pong exchange timeouts, the other node is marked as
+   unreachable and temporarily removed from the list of recipients of
+   the real payload messages. When it becomes reachable again, it’s
+   re-added and communication with it continues. So all network
+   failures are reduced to *‘I can’t see their `Pong` in a timely
+   manner, let’s cease communication for now’*.
 
-1. Sample configuration is in `lib/Nodes.hs`.
+## A starting point to review
 
-1. You have to provide `runOnNodes :: [[NodeId] -> Process ()] -> IO
-   ()` to `Runner.run`. This function takes a (potentially) infinite
-   list of functions from an *initial peer list* to *processes* and
-   runs them on `Nodes.thisManyNodes` nodes. Of course, `runOnNodes`
-   could also use a hardcoded list of nodes, as mentioned in the spec.
+1. Sample network configuration is in `lib/Nodes.hs`.
 
-1. With current setting of `Nodes.initialPeerDiscoveryTimeout` at 50
-   µs, not all peers get discovered initially (when running on
-   loopback interfaces). This is positive → the discovery algorithm
-   can be tested.
+   1. `runOnNodes :: [[NodeId] -> Process ()] -> IO ()` has to be
+      provided to `Runner.run`. This function takes a (potentially)
+      infinite list of functions from an *initial peer list* to
+      *processes* and runs them on `Nodes.thisManyNodes` nodes. Of
+      course, `runOnNodes` could also use a hardcoded list of nodes, as
+      mentioned in the spec.
 
-1. Currently, there’s an artificial logger node to counteract
-   interleaving of the log messages printed to stderr. More about that
-   in `lib/Nodes.hs`.
+   1. Currently, there’s an artificial logger node to counteract
+      interleaving of the log messages printed to stderr. More about that
+      in `lib/Nodes.hs`.
+
+1. It may be worth experimenting with different hardcoded settings.
+
+   1. With current setting of `Nodes.initialPeerDiscoveryTimeout` at
+      50 µs, not all peers get discovered initially (when running on
+      loopback interfaces). This has a positive effect: the discovery
+      algorithm can be tested.
+
+   1. Experimenting with ping timeout in `KeepAlive`—e.g. using 10 s
+      instead of 3 s yields 2–3× more messages sent on my machine and
+      far less network topology changes.
+
+1. An example follows below.
 
 ## Example
 
@@ -231,6 +233,15 @@ used to get some useful information.
 
 ## Possible improvements
 
+* More automatic tests need to be added. Some feedback / maybe more
+  specs / real use scenario / real environment would help greatly in
+  designing them.
+
+* Some major refactoring is needed—most importantly, moving all of the
+  network upkeeping code to its own module and testing it
+  thoroughly. But I’d need some more direction/feedback to better
+  decide what goes where.
+
 * It’s very tempting to calculate the tuples on the
   fly. Unfortunately, they have to be sorted on time sent and not
   received. What could be done, though, is keeping only last 500 ms
@@ -247,8 +258,6 @@ used to get some useful information.
 
 * Regarding node discovery:
 
-  * [the first paragraph of this README](#the-main-challenge),
-
   * read through the code of– and test `distributed-process-p2p` for
     this application,
 
@@ -260,6 +269,12 @@ used to get some useful information.
     `findOnePeer :: Int → IO (Maybe NodeId)` might turn out
     better. Perhaps `findPeers` should return a Stream and not a List?
 
+  * pinging in `KeepAlive` might use some exponential back-off
+    strategy for both successful and failed ping exchanges,
+
+  * after some long time of unreachability, zombie nodes should be
+    completely forgotten,
+
   * `Network.Transport.InMemory` contains the `breakConnection`
     function, which might be used in tests,
 
@@ -268,11 +283,6 @@ used to get some useful information.
 
   * maybe sent time could somehow be used when broadcasting the peer
     lists,
-
-  * current discovery algorithm is solely additive—disconnected nodes
-    are not removed form peer lists, and that loses CPU time on
-    sending messages to them — related to [the first paragraph of this
-    README](#the-main-challenge),
 
   * research different cluster node discovery algorithms in published
     papers; I haven’t done that, wanting to give you an initial
@@ -311,6 +321,10 @@ used to get some useful information.
     would be more correct (as it’s meant to kill not just a
     process/node, but the whole application),
 
+  * we could keep track of how many topology configuration messages
+    have been sent/received, to really compare conf chattiness to
+    normal traffic,
+
   * add pretty pictures to this README.md from Wikipedia? =)
 
 * Probably, a Prelude should be used that is saner than the default
@@ -319,9 +333,6 @@ used to get some useful information.
 * Potential `Exception`s in processes are not handled. However, I’m
   not using them for flow control myself, they could happen during
   setting up transports etc.
-
-* Automatic tests, but I need more specs to do that — related to [the
-  first paragraph of this README](#the-main-challenge),
 
 * The tests could be using the `distributed-process-systest` package,
 
@@ -336,7 +347,7 @@ used to get some useful information.
 
 ## Summary
 
-I hope you’ll forgive me that his initial version took so long. As I
-said, I had to familiarize myself with Cloud Haskell, at the same time
-helping around the house. Before, I’ve only used Akka, but CH is
-**way** better and more intuitive. :heart:
+I hope you’ll forgive me that this initial version took a little
+longer. As I said, I had to familiarize myself a bit with Cloud
+Haskell (while not doing this full-time). :smile: Before, I’ve only
+used Akka, but CH seems better, more intuitive. :heart:
